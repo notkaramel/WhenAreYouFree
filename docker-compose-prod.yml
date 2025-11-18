@@ -1,0 +1,51 @@
+services:
+  frontend:
+    container_name: wayf-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app              # Mount your frontend code
+      - /app/node_modules            # Prevent overwriting node_modules
+    depends_on:
+      - backend
+
+  backend:
+    container_name: wayf-backend
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend       # Hot-reload for backend code
+      - ./database:/app/database     # Hot-reload for database models
+      - /app/backend/node_modules    # Prevent overwriting node_modules
+    depends_on:
+      - database
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend/index.ts
+          target: /app/backend/index.ts
+          ignore:
+            - node_modules/
+            - .git/
+        - action: rebuild
+          path: ./backend/package.json
+          target: /app/backend/package.json
+
+  database:
+    container_name: wayf-database
+    build:
+      context: .
+      dockerfile: database/Dockerfile
+    volumes:
+      - wayf-data:/var/lib/mongodb
+      - wayf-db-logs:/var/log/mongodb
+
+volumes:
+  wayf-data:
+  wayf-db-logs:
