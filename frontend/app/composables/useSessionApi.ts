@@ -59,7 +59,37 @@ interface UpdateAvailabilityData {
 
 export const useSessionApi = () => {
   const config = useRuntimeConfig();
-  const apiBase = config.public.apiBaseUrl || 'http://localhost:8000';
+  
+  // Determine API base URL:
+  // 1. If explicitly set in config, use it
+  // 2. In production (client-side), use relative path /api (proxied through nginx)
+  // 3. In development, use localhost:8000
+  // 4. Server-side always needs absolute URL
+  let apiBase: string;
+  if (config.public.apiBaseUrl) {
+    apiBase = config.public.apiBaseUrl;
+  } else if (import.meta.client && !import.meta.dev) {
+    // Production client-side: use relative path (proxied through nginx)
+    apiBase = '/api';
+  } else if (import.meta.server) {
+    // Server-side: use absolute URL (default to backend service name in Docker)
+    apiBase = process.env.NUXT_PUBLIC_API_BASE_URL || 'http://backend:8000';
+  } else {
+    // Development client-side
+    apiBase = 'http://localhost:8000';
+  }
+  
+  // Helper to build API path
+  const buildApiPath = (path: string): string => {
+    // In production (relative path), apiBase is already '/api', so just append path
+    // In development/server-side (absolute URL), add /api prefix since backend serves at /api/sessions
+    if (apiBase.startsWith('http://') || apiBase.startsWith('https://')) {
+      return `${apiBase}/api${path}`;
+    }
+    // Relative path (production client-side): apiBase is '/api', path is '/sessions'
+    // Result: '/api/sessions' - nginx will strip /api prefix and forward /sessions to backend
+    return `${apiBase}${path}`;
+  };
 
   /**
    * Create a new session
@@ -70,7 +100,7 @@ export const useSessionApi = () => {
         sessionId: string;
         link: string;
         session: Session;
-      }>(`${apiBase}/api/sessions`, {
+      }>(buildApiPath('/sessions'), {
         method: 'POST',
         body: data
       });
@@ -87,7 +117,7 @@ export const useSessionApi = () => {
   const getSession = async (sessionId: string) => {
     try {
       const response = await $fetch<{ session: Session }>(
-        `${apiBase}/api/sessions/${sessionId}`
+        buildApiPath(`/sessions/${sessionId}`)
       );
       return { data: response.session, error: null };
     } catch (error: any) {
@@ -104,7 +134,7 @@ export const useSessionApi = () => {
       const response = await $fetch<{
         message: string;
         session: Session;
-      }>(`${apiBase}/api/sessions/${sessionId}`, {
+      }>(buildApiPath(`/sessions/${sessionId}`), {
         method: 'PUT',
         body: data
       });
@@ -126,7 +156,7 @@ export const useSessionApi = () => {
       const response = await $fetch<{
         message: string;
         availability: Availability;
-      }>(`${apiBase}/api/sessions/${sessionId}/availability`, {
+      }>(buildApiPath(`/sessions/${sessionId}/availability`), {
         method: 'POST',
         body: data
       });
@@ -145,7 +175,7 @@ export const useSessionApi = () => {
       const response = await $fetch<{
         message: string;
         session: Session;
-      }>(`${apiBase}/api/sessions/${sessionId}/availability/${encodeURIComponent(participantName)}`, {
+      }>(buildApiPath(`/sessions/${sessionId}/availability/${encodeURIComponent(participantName)}`), {
         method: 'DELETE'
       });
       return { data: response.session, error: null };
@@ -161,7 +191,7 @@ export const useSessionApi = () => {
   const deleteSession = async (sessionId: string) => {
     try {
       const response = await $fetch<{ message: string }>(
-        `${apiBase}/api/sessions/${sessionId}`,
+        buildApiPath(`/sessions/${sessionId}`),
         {
           method: 'DELETE'
         }

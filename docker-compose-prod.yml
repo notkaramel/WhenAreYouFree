@@ -5,8 +5,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
     ports:
-      - "80:3000"
+      - "80:80"   # HTTP (redirects to HTTPS)
+      - "443:443" # HTTPS
+    environment:
+      # Optional: override API base URL (defaults to /api for proxying)
+      - NUXT_PUBLIC_API_BASE_URL=/api
     volumes:
+      # Mount SSL certificates (update path to your certificate location)
+      # Expected files: domain.cert.pem, private.key.pem, public.key.pem (optional)
+      - ./certs:/etc/nginx/ssl:ro
       - ./frontend:/app              # Mount your frontend code
       - /app/node_modules            # Prevent overwriting node_modules
     depends_on:
@@ -19,6 +26,9 @@ services:
       dockerfile: ./backend/Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      # Allow frontend origin for CORS
+      - FRONTEND_URL=https://free.notkaramel.dev,http://localhost:3000
     volumes:
       - ./backend:/app/backend       # Hot-reload for backend code
       - ./database:/app/database     # Hot-reload for database models
